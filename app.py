@@ -1784,6 +1784,10 @@ with tab_t1games:
 
     raw_t1 = m._raw_df if m._raw_df is not None else pd.DataFrame()
 
+    if not raw_t1.empty and "league" in raw_t1.columns:
+        _available_leagues_debug = sorted(raw_t1["league"].dropna().unique().tolist())
+        st.caption(f"🔍 Debug — leagues in loaded data: {_available_leagues_debug}")
+
     if raw_t1.empty:
         st.info("No data loaded.")
     else:
