@@ -18,7 +18,7 @@ DEFAULT_LEAGUES = MAJOR_LEAGUES | INTERNATIONAL   # FST excluded by default
 
 LEAGUE_REGION_TIER: dict[str, int] = {
     # T1 — top two regions globally
-    "LCK": 1, "LPL": 1,
+    "LCK": 1, "LPL": 1, "MSI": 1, "Worlds": 1, "EWC": 1,
     # T2 — strong western regions
     "LEC": 2, "LCS": 2, "LCP": 2,
     # T3 — strong regional leagues
