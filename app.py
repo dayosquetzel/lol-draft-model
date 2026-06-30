@@ -1,8 +1,7 @@
 """
-LoL Draft Model — Streamlit UI v2
+LoL Draft Model - Streamlit UI v2
 Tabs: Draft | Meta | Tier List | Accuracy | Settings
 """
-
 import sys
 import sqlite3
 from datetime import datetime
@@ -366,17 +365,10 @@ def _colour_prob(p: float) -> str:
 def _delta_str(d: float) -> str:
     return f"+{d:.1f}%" if d >= 0 else f"{d:.1f}%"
 
-# Champions to exclude from specific roles regardless of data
-_ROLE_EXCLUSIONS: dict[str, set[str]] = {
-    "top": {"Nidalee"},
-}
-
 def _champs_for_role(m: DraftModel, role: str) -> list[str]:
-    excluded = _ROLE_EXCLUSIONS.get(role, set())
     return sorted([
         c for c in m.base_model.known_champions()
-        if c not in excluded
-        and m.base_model._role_qualifies(c, role)
+        if m.base_model._role_qualifies(c, role)
         and m.base_model.role_counts_.get((c, role), 0) >= m.config.MIN_CHAMP_GAMES
     ])
 
@@ -400,8 +392,8 @@ def _apply_clear_draft():
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab_draft, tab_meta, tab_tier, tab_accuracy, tab_opinion, tab_t1games, tab_scout, tab_settings = st.tabs(
-    ["⚔️ Draft", "📊 Meta", "🏆 Tier List", "📈 Accuracy & Games", "🧪 Opinion Log", "🎮 Recent Games", "🔍 Team Scout", "⚙️ Settings"]
+tab_draft, tab_meta, tab_tier, tab_accuracy, tab_opinion, tab_t1games, tab_settings = st.tabs(
+    ["⚔️ Draft", "📊 Meta", "🏆 Tier List", "📈 Accuracy & Games", "🧪 Opinion Log", "🎮 Recent Games", "⚙️ Settings"]
 )
 
 
@@ -605,9 +597,8 @@ with tab_draft:
                 continue
             with col:
                 st.markdown(f"**{side} — {ROLE_LABELS[next_role]}**")
-                _role_excl = list(_ROLE_EXCLUSIONS.get(next_role, set()))
                 recs = m.recommend_pick(team_so_far, opp_so_far, next_role,
-                                        banned=bans + _role_excl, top_n=10)
+                                        banned=bans, top_n=10)
                 if recs.empty:
                     st.info("No eligible recommendations.")
                 else:
@@ -615,16 +606,6 @@ with tab_draft:
                     recs["priority_%"] = recs["champion"].apply(
                         lambda c: _draft_priority.get((c, next_role), 0.0)
                     )
-                    # Re-rank: blend win_prob (80%) + normalised priority (20%) so that
-                    # a champion with near-zero real-world priority (e.g. Nidalee in a
-                    # non-Nidalee meta) cannot float to #1 purely on model score.
-                    _wp_min, _wp_max = recs["win_prob_%"].min(), recs["win_prob_%"].max()
-                    _pr_min, _pr_max = recs["priority_%"].min(), recs["priority_%"].max()
-                    recs["_wp_norm"] = (recs["win_prob_%"] - _wp_min) / max(_wp_max - _wp_min, 1e-9)
-                    recs["_pr_norm"] = (recs["priority_%"] - _pr_min) / max(_pr_max - _pr_min, 1e-9)
-                    recs["_rec_score"] = 0.80 * recs["_wp_norm"] + 0.20 * recs["_pr_norm"]
-                    recs = recs.sort_values("_rec_score", ascending=False).head(10).reset_index(drop=True)
-                    recs = recs.drop(columns=["_wp_norm", "_pr_norm", "_rec_score"])
                     recs.insert(0, "#", range(1, len(recs) + 1))
                     recs["win_prob_%"]    = recs["win_prob_%"].apply(lambda p: f"{_colour_prob(p/100)} {p:.1f}%")
                     recs["counter_adv_%"] = recs["counter_adv_%"].apply(_delta_str)
@@ -988,13 +969,13 @@ with tab_meta:
                 column_config={
                     "Champion":  st.column_config.TextColumn("Champion",   width="medium"),
                     "Role":      st.column_config.TextColumn("Role",       width="small"),
-                    "Adj WR%":   st.column_config.ProgressColumn("Adj WR%", min_value=40, max_value=65, format="%.1f%%",
+                    "Adj WR%":   st.column_config.NumberColumn("Adj WR%",  width="small", format="%.1f",
                         help="BT-adjusted win rate for this champion in this role."),
-                    "Priority%": st.column_config.ProgressColumn("Priority%", min_value=0, max_value=100, format="%.1f%%",
+                    "Priority%": st.column_config.NumberColumn("Priority%", width="small", format="%.1f",
                         help="Pick + Ban presence % across all games in the selected window."),
                     "Trend":     st.column_config.TextColumn("Trend",      width="small",
                         help="Patch trend arrow — rising champions score higher in FP Score."),
-                    "FP Score":  st.column_config.ProgressColumn("FP Score", min_value=0, max_value=100, format="%.1f",
+                    "FP Score":  st.column_config.NumberColumn("FP Score",  width="small", format="%.1f",
                         help="First Pick Score = 40% normalised WR + 40% normalised Priority + 20% patch trend (0–100)."),
                     "Sample":    st.column_config.TextColumn("Sample",     width="small",
                         help="⚠️Ng = fewer than 2× min games — win rate is heavily shrunk, treat with caution."),
@@ -1021,11 +1002,11 @@ with tab_meta:
                 if not role_qualifies.get((c, r), False):
                     continue
                 wr_pct = wr * 100
-                if wr_pct >= 55:   grade = "🟢 S"
-                elif wr_pct >= 52: grade = "🟡 A"
-                elif wr_pct >= 50: grade = "⚪ B"
-                elif wr_pct >= 48: grade = "🟠 C"
-                else:              grade = "🔴 D"
+                if wr_pct >= 55:   grade = "S"
+                elif wr_pct >= 52: grade = "A"
+                elif wr_pct >= 50: grade = "B"
+                elif wr_pct >= 48: grade = "C"
+                else:              grade = "D"
                 trend = m.patch_trend_model.trend_arrow(c, r)
                 pr_score = _priority_scores.get((c, r), 0.0)
                 rows_wr.append({"Champion": c, "Grade": grade, wr_col: round(wr_pct, 1),
@@ -1069,10 +1050,9 @@ with tab_meta:
                     column_config={
                         "Champion":  st.column_config.TextColumn("Champion",   width="medium",
                             help="⚠️Ng = low sample size (< 2× min games). Win rate is heavily shrunk toward role average — interpret cautiously."),
-                        "Grade":     st.column_config.TextColumn("Grade",      width="small",
-                            help="🟢S ≥55% · 🟡A ≥52% · ⚪B ≥50% · 🟠C ≥48% · 🔴D <48%"),
-                        wr_col:      st.column_config.ProgressColumn(wr_col,   min_value=40, max_value=65, format="%.1f%%"),
-                        "Priority%": st.column_config.ProgressColumn("Priority%", min_value=0, max_value=100, format="%.1f%%",
+                        "Grade":     st.column_config.TextColumn("Grade",      width="small"),
+                        wr_col:      st.column_config.NumberColumn(wr_col,     width="small", format="%.1f"),
+                        "Priority%": st.column_config.NumberColumn("Priority%", width="small", format="%.1f",
                             help="Pick + Ban presence % across all games in the selected window."),
                         "Trend":     st.column_config.TextColumn("Trend",      width="small"),
                         "Games":     st.column_config.NumberColumn("Games",    width="small"),
@@ -1092,11 +1072,11 @@ with tab_meta:
                 df_pr.index += 1
                 # Priority grade based on P+B %
                 def _pr_grade(p):
-                    if p >= 80: return "🟢 S"
-                    if p >= 60: return "🟡 A"
-                    if p >= 40: return "⚪ B"
-                    if p >= 20: return "🟠 C"
-                    return "🔴 D"
+                    if p >= 80: return "S"
+                    if p >= 60: return "A"
+                    if p >= 40: return "B"
+                    if p >= 20: return "C"
+                    return "D"
                 df_pr["P Grade"] = df_pr["Priority%"].apply(_pr_grade)
                 df_pr = df_pr[["Champion", "P Grade", "Priority%", "Grade", wr_col, "Trend", "Games"]]
                 st.dataframe(
@@ -1105,12 +1085,12 @@ with tab_meta:
                         "Champion":  st.column_config.TextColumn("Champion",   width="medium",
                             help="⚠️Ng = low sample size (< 2× min games). Win rate is heavily shrunk toward role average — interpret cautiously."),
                         "P Grade":   st.column_config.TextColumn("P Grade",    width="small",
-                            help="🟢S ≥80% · 🟡A ≥60% · ⚪B ≥40% · 🟠C ≥20% · 🔴D <20%"),
-                        "Priority%": st.column_config.ProgressColumn("Priority%", min_value=0, max_value=100, format="%.1f%%",
+                            help="Priority grade: S ≥ 80% · A ≥ 60% · B ≥ 40% · C ≥ 20% · D < 20%"),
+                        "Priority%": st.column_config.NumberColumn("Priority%", width="small", format="%.1f",
                             help="(Picks in this role + bans) as % of available game slots. Higher = more contested."),
                         "Grade":     st.column_config.TextColumn("WR Grade",   width="small",
-                            help="🟢S ≥55% · 🟡A ≥52% · ⚪B ≥50% · 🟠C ≥48% · 🔴D <48%"),
-                        wr_col:      st.column_config.ProgressColumn(wr_col,   min_value=40, max_value=65, format="%.1f%%"),
+                            help="Win rate grade: S ≥ 55% · A ≥ 52% · B ≥ 50% · C ≥ 48% · D < 48%"),
+                        wr_col:      st.column_config.NumberColumn(wr_col,     width="small", format="%.1f"),
                         "Trend":     st.column_config.TextColumn("Trend",      width="small"),
                         "Games":     st.column_config.NumberColumn("Games",    width="small"),
                     },
@@ -1216,8 +1196,7 @@ with tab_tier:
             use_container_width=True, hide_index=True,
             column_config={
                 "Team":     st.column_config.TextColumn("Team",     width="medium"),
-                "BT Score": st.column_config.ProgressColumn("BT Score", min_value=0, max_value=2, format="%.3f",
-                    help="Bradley-Terry strength. Mean = 1.0. Higher = stronger team."),
+                "BT Score": st.column_config.NumberColumn("BT Score",width="small", format="%.3f"),
                 "Tier":     st.column_config.TextColumn("Tier",     width="small"),
                 "W":        st.column_config.NumberColumn("W",       width="small"),
                 "L":        st.column_config.NumberColumn("L",       width="small"),
@@ -1336,11 +1315,11 @@ with tab_tier:
                         "Team":   st.column_config.TextColumn("Team",   width="medium"),
                         "Region": st.column_config.TextColumn("Region", width="small"),
                         "Games":  st.column_config.NumberColumn("Games", width="small"),
-                        "S%":     st.column_config.ProgressColumn("🟡 S%",  min_value=0, max_value=100, format="%.1f%%",
+                        "S%":     st.column_config.NumberColumn("🟡 S%",  width="small", format="%.1f%%",
                             help="% of drafts where model gave ≥65% win probability"),
-                        "A%":     st.column_config.ProgressColumn("🟢 A%",  min_value=0, max_value=100, format="%.1f%%",
+                        "A%":     st.column_config.NumberColumn("🟢 A%",  width="small", format="%.1f%%",
                             help="% of drafts where model gave 57–65% win probability"),
-                        "A%+":    st.column_config.ProgressColumn("S+A%",   min_value=0, max_value=100, format="%.1f%%",
+                        "A%+":    st.column_config.NumberColumn("S+A%",  width="small", format="%.1f%%",
                             help="S% + A%: share of drafts graded elite (≥57% WP)"),
                         "B%":     st.column_config.NumberColumn("🔵 B%",  width="small", format="%.1f%%",
                             help="% of drafts where model gave 50–57% win probability"),
@@ -1389,7 +1368,7 @@ with tab_tier:
                         "Draft Grade": st.column_config.TextColumn("Draft Grade", width="medium"),
                         "Games":       st.column_config.NumberColumn("Games",     width="small"),
                         "Wins":        st.column_config.NumberColumn("Wins",      width="small"),
-                        "Win Rate":    st.column_config.ProgressColumn("Win Rate", min_value=0, max_value=100, format="%.1f%%",
+                        "Win Rate":    st.column_config.NumberColumn("Win Rate",  width="small", format="%.1f%%",
                             help="How often teams with this draft grade actually won the game."),
                     },
                 )
@@ -1630,8 +1609,7 @@ with tab_accuracy:
                         "Draft Grade": st.column_config.TextColumn("Draft Grade", width="medium"),
                         "Games":       st.column_config.NumberColumn("Games",     width="small"),
                         "Wins":        st.column_config.NumberColumn("Wins",      width="small"),
-                        "Win Rate":    st.column_config.ProgressColumn("Win Rate", min_value=0, max_value=100, format="%.1f%%",
-                            help="How often teams with this draft grade actually won the game."),
+                        "Win Rate":    st.column_config.NumberColumn("Win Rate",  width="small", format="%.1f%%"),
                     },
                 )
 
@@ -1781,7 +1759,7 @@ with tab_t1games:
     if raw_t1.empty:
         st.info("No data loaded.")
     else:
-        _MAJOR_LEAGUES = ["LCK", "LPL", "LEC", "LCS", "LCP"]
+        _MAJOR_LEAGUES = ["LCK", "LPL", "LEC", "LCS", "LCP", "MSI", "Worlds", "EWC"]
         t1c1, t1c2 = st.columns([3, 2])
         with t1c1:
             t1_region_filter = st.multiselect(
@@ -1928,296 +1906,6 @@ with tab_t1games:
                         "🔴 Sup":     st.column_config.TextColumn("🔴 Sup",     width="small"),
                     },
                 )
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# TEAM SCOUT TAB
-# ═══════════════════════════════════════════════════════════════════════════
-with tab_scout:
-    _data_banner()
-    m = get_model()
-    st.markdown("### Team Scout")
-    st.caption(
-        "Per-team draft tendencies: champion pool by role, most common picks, "
-        "bans, first picks, and side win rates."
-    )
-
-    raw_scout = m._raw_df if m._raw_df is not None else pd.DataFrame()
-
-    if raw_scout.empty:
-        st.info("No data loaded.")
-    else:
-        # ── Team selector ─────────────────────────────────────────────────────
-        # Build team list from player rows (teamname column)
-        player_scout = raw_scout[raw_scout["position"] != "team"].copy()
-        team_scout_rows = raw_scout[raw_scout["position"] == "team"].copy()
-
-        all_teams_scout = sorted(
-            t for t in team_scout_rows["teamname"].dropna().unique()
-            if isinstance(t, str) and t.strip()
-        ) if "teamname" in team_scout_rows.columns else []
-
-        sc1, sc2 = st.columns([3, 2])
-        with sc1:
-            selected_team = st.selectbox(
-                "Select team", options=all_teams_scout,
-                key="scout_team",
-            )
-        with sc2:
-            # Year / patch filter
-            scout_years = sorted(
-                raw_scout["year"].dropna().unique().astype(int).tolist()
-            ) if "year" in raw_scout.columns else []
-            scout_year_opts = ["All data"] + [str(y) for y in scout_years]
-            scout_year = st.selectbox("Year filter", scout_year_opts, key="scout_year")
-
-        if not selected_team:
-            st.info("Select a team above.")
-        else:
-            # Apply year filter
-            if scout_year != "All data" and "year" in raw_scout.columns:
-                raw_scout_f = raw_scout[raw_scout["year"].astype(int) == int(scout_year)]
-            else:
-                raw_scout_f = raw_scout
-
-            team_games_rows = raw_scout_f[
-                (raw_scout_f["position"] == "team") &
-                (raw_scout_f["teamname"] == selected_team)
-            ].copy()
-
-            team_player_rows = raw_scout_f[
-                (raw_scout_f["position"] != "team") &
-                (raw_scout_f["teamname"] == selected_team)
-            ].copy()
-
-            if team_games_rows.empty:
-                st.warning(f"No games found for **{selected_team}** with current filter.")
-            else:
-                # De-duplicate: Oracle's Elixir can have duplicate team rows when
-                # multiple CSVs are concatenated. One row per (gameid, side) is correct.
-                team_games_dedup = team_games_rows.drop_duplicates(subset=["gameid", "side"])
-                blue_games   = team_games_dedup[team_games_dedup["side"] == "Blue"]
-                red_games    = team_games_dedup[team_games_dedup["side"] == "Red"]
-                blue_wins    = int(blue_games["result"].sum()) if "result" in blue_games.columns else 0
-                red_wins     = int(red_games["result"].sum())  if "result" in red_games.columns else 0
-                blue_total   = len(blue_games)
-                red_total    = len(red_games)
-                total_games  = blue_total + red_total
-                total_wins   = blue_wins + red_wins
-
-                # ── Top-level metrics ─────────────────────────────────────────
-                st.markdown(f"#### {selected_team} — {scout_year}")
-                m1, m2, m3, m4, m5 = st.columns(5)
-                m1.metric("Total games", total_games)
-                m2.metric("Overall W/L", f"{total_wins}–{total_games - total_wins}")
-                m3.metric("Win rate", f"{100*total_wins/max(total_games,1):.1f}%")
-                m4.metric(
-                    "Blue side WR",
-                    f"{100*blue_wins/max(blue_total,1):.1f}% ({blue_wins}/{blue_total})"
-                )
-                m5.metric(
-                    "Red side WR",
-                    f"{100*red_wins/max(red_total,1):.1f}% ({red_wins}/{red_total})"
-                )
-
-                st.divider()
-
-                scout_sub1, scout_sub2, scout_sub3 = st.tabs(
-                    ["🗡️ Champion Pool by Role", "🚫 Bans", "🥇 First Picks"]
-                )
-
-                # ── Champion pool by role ─────────────────────────────────────
-                with scout_sub1:
-                    st.caption(
-                        "Champions played by this team in each role, sorted by games played. "
-                        "Win rate shown is raw (not BT-adjusted) for this team specifically."
-                    )
-                    if team_player_rows.empty or "position" not in team_player_rows.columns:
-                        st.info("No player-level data found.")
-                    else:
-                        pool_roles = st.tabs([ROLE_LABELS[r] for r in ROLES])
-                        for role, rtab in zip(ROLES, pool_roles):
-                            with rtab:
-                                role_rows = team_player_rows[
-                                    team_player_rows["position"] == role
-                                ].copy()
-                                if role_rows.empty:
-                                    st.info(f"No {ROLE_LABELS[role]} data.")
-                                    continue
-
-                                pool_stats = []
-                                for champ, grp in role_rows.groupby("champion"):
-                                    if not isinstance(champ, str) or not champ:
-                                        continue
-                                    n   = len(grp)
-                                    wins = int(grp["result"].sum()) if "result" in grp.columns else 0
-                                    wr  = wins / n if n > 0 else 0.0
-                                    pool_stats.append({
-                                        "Champion": champ,
-                                        "Games":    n,
-                                        "Wins":     wins,
-                                        "Win%":     round(wr * 100, 1),
-                                        "Pick%":    round(100 * n / max(total_games, 1), 1),
-                                    })
-
-                                if not pool_stats:
-                                    st.info("No data.")
-                                    continue
-
-                                pool_df = (
-                                    pd.DataFrame(pool_stats)
-                                    .sort_values("Games", ascending=False)
-                                    .reset_index(drop=True)
-                                )
-                                def _wr_grade(w):
-                                    if w >= 70: return "🟢 S"
-                                    if w >= 55: return "🟡 A"
-                                    if w >= 45: return "⚪ B"
-                                    if w >= 30: return "🟠 C"
-                                    return "🔴 D"
-                                pool_df["Grade"] = pool_df["Win%"].apply(_wr_grade)
-                                pool_df.index += 1
-                                st.dataframe(
-                                    pool_df[["Champion", "Grade", "Win%", "Games", "Wins", "Pick%"]],
-                                    use_container_width=True,
-                                    column_config={
-                                        "Champion": st.column_config.TextColumn("Champion", width="medium"),
-                                        "Grade":    st.column_config.TextColumn("Grade",    width="small",
-                                            help="🟢S ≥70% · 🟡A ≥55% · ⚪B ≥45% · 🟠C ≥30% · 🔴D <30%"),
-                                        "Win%":     st.column_config.ProgressColumn("Win%",
-                                            min_value=0, max_value=100, format="%.1f%%"),
-                                        "Games":    st.column_config.NumberColumn("Games",  width="small"),
-                                        "Wins":     st.column_config.NumberColumn("Wins",   width="small"),
-                                        "Pick%":    st.column_config.ProgressColumn("Pick% of games",
-                                            min_value=0, max_value=100, format="%.1f%%",
-                                            help="How often this champion appeared in this role as a fraction of team's total games."),
-                                    },
-                                )
-
-                # ── Bans ─────────────────────────────────────────────────────
-                with scout_sub2:
-                    st.caption(
-                        "Champions banned by this team, sorted by frequency. "
-                        "Shows how often each champion is prioritised away."
-                    )
-                    ban_cols_scout = [
-                        c for c in raw_scout_f.columns if c.startswith("ban") and c[3:].isdigit()
-                    ]
-                    if not ban_cols_scout:
-                        st.info("No ban columns found in data.")
-                    else:
-                        # team-level rows for this team
-                        team_ban_rows = raw_scout_f[
-                            (raw_scout_f["position"] == "team") &
-                            (raw_scout_f["teamname"] == selected_team)
-                        ]
-                        ban_counts: dict[str, int] = {}
-                        for col in ban_cols_scout:
-                            for champ in team_ban_rows[col].dropna():
-                                if isinstance(champ, str) and champ.strip():
-                                    ban_counts[champ] = ban_counts.get(champ, 0) + 1
-
-                        if not ban_counts:
-                            st.info("No ban data found.")
-                        else:
-                            ban_df = (
-                                pd.DataFrame(
-                                    [{"Champion": c, "Bans": n,
-                                      "Ban%": round(100 * n / max(total_games, 1), 1)}
-                                     for c, n in ban_counts.items()]
-                                )
-                                .sort_values("Bans", ascending=False)
-                                .reset_index(drop=True)
-                            )
-                            ban_df.index += 1
-
-                            bc1, bc2 = st.columns([2, 3])
-                            with bc1:
-                                top_n_bans = st.slider("Show top N bans", 5, min(50, len(ban_df)), 15, 5, key="scout_ban_n")
-                            st.dataframe(
-                                ban_df.head(top_n_bans),
-                                use_container_width=True,
-                                column_config={
-                                    "Champion": st.column_config.TextColumn("Champion", width="medium"),
-                                    "Bans":     st.column_config.NumberColumn("Times Banned", width="small"),
-                                    "Ban%":     st.column_config.ProgressColumn("Ban% of games", min_value=0, max_value=100, format="%.1f%%",
-                                        help="Percentage of this team's games where they banned this champion."),
-                                },
-                            )
-
-                # ── First picks ───────────────────────────────────────────────
-                with scout_sub3:
-                    st.caption(
-                        "Champions this team picked with their first pick slot (pick1 on blue, "
-                        "or first red-side pick). Also shows first-pick win rate."
-                    )
-                    # Use pick1 column from team-level rows for blue side first picks.
-                    # For red side, pick1 is the first red pick after blue's first two.
-                    # We use the raw pick1 column which Oracle's Elixir populates per team.
-                    team_tl_scout = raw_scout_f[
-                        (raw_scout_f["position"] == "team") &
-                        (raw_scout_f["teamname"] == selected_team)
-                    ].copy()
-
-                    fp_counts: dict[str, dict] = {}  # champ -> {games, wins, blue, red}
-
-                    # Oracle's Elixir: pick1 = the team's first selection in draft order
-                    if "pick1" in team_tl_scout.columns:
-                        for _, row in team_tl_scout.iterrows():
-                            champ = row.get("pick1")
-                            if not isinstance(champ, str) or not champ.strip():
-                                continue
-                            result = int(row["result"]) if "result" in row and pd.notna(row["result"]) else 0
-                            side   = str(row.get("side", ""))
-                            if champ not in fp_counts:
-                                fp_counts[champ] = {"games": 0, "wins": 0, "blue": 0, "red": 0}
-                            fp_counts[champ]["games"] += 1
-                            fp_counts[champ]["wins"]  += result
-                            if side == "Blue":
-                                fp_counts[champ]["blue"] += 1
-                            else:
-                                fp_counts[champ]["red"]  += 1
-
-                    if not fp_counts:
-                        st.info("No first-pick data found (pick1 column missing or empty).")
-                    else:
-                        def _fp_wr_grade(w):
-                            if w >= 70: return "🟢 S"
-                            if w >= 55: return "🟡 A"
-                            if w >= 45: return "⚪ B"
-                            if w >= 30: return "🟠 C"
-                            return "🔴 D"
-                        fp_df = pd.DataFrame([
-                            {
-                                "Champion": champ,
-                                "First Picks": d["games"],
-                                "Wins":        d["wins"],
-                                "Win%":        round(100 * d["wins"] / max(d["games"], 1), 1),
-                                "FP%":         round(100 * d["games"] / max(total_games, 1), 1),
-                                "Blue":        d["blue"],
-                                "Red":         d["red"],
-                            }
-                            for champ, d in fp_counts.items()
-                        ]).sort_values("First Picks", ascending=False).reset_index(drop=True)
-                        fp_df["Grade"] = fp_df["Win%"].apply(_fp_wr_grade)
-                        fp_df.index += 1
-
-                        st.dataframe(
-                            fp_df[["Champion", "Grade", "Win%", "First Picks", "FP%", "Wins", "Blue", "Red"]],
-                            use_container_width=True,
-                            column_config={
-                                "Champion":    st.column_config.TextColumn("Champion",     width="medium"),
-                                "Grade":       st.column_config.TextColumn("Grade",        width="small",
-                                    help="🟢S ≥70% · 🟡A ≥55% · ⚪B ≥45% · 🟠C ≥30% · 🔴D <30%"),
-                                "Win%":        st.column_config.ProgressColumn("Win%", min_value=0, max_value=100, format="%.1f%%"),
-                                "First Picks": st.column_config.NumberColumn("1st Picks",  width="small"),
-                                "FP%":         st.column_config.ProgressColumn("FP% of games", min_value=0, max_value=100, format="%.1f%%",
-                                    help="How often this team first-picked this champion as a % of total games."),
-                                "Wins":        st.column_config.NumberColumn("Wins",        width="small"),
-                                "Blue":        st.column_config.NumberColumn("Blue side",  width="small"),
-                                "Red":         st.column_config.NumberColumn("Red side",   width="small"),
-                            },
-                        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2386,7 +2074,7 @@ with tab_settings:
     )
     if uploaded_mains:
         import tempfile, os
-        dfs = [pd.read_csv(f, low_memory=False, encoding='latin-1') for f in uploaded_mains]
+        dfs = [pd.read_csv(f, low_memory=False) for f in uploaded_mains]
         combined = pd.concat(dfs, ignore_index=True)
         with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, dir=tempfile.gettempdir()) as tmp:
             combined.to_csv(tmp.name, index=False)
@@ -2527,4 +2215,5 @@ with tab_settings:
     # Show existing .pkl files in the app directory for convenience
     pkl_files = sorted(Path(__file__).parent.glob("*.pkl"))
     if pkl_files:
-        st.caption("Saved models found: " + "  ·  ".join(f.name for f in pkl_files))
+        for f in pkl_files:
+            st.write(f"• `{f.name}`")
