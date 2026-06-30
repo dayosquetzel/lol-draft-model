@@ -40,8 +40,9 @@ def _ensure_csv_downloaded(path: Path, url: str):
     import urllib.request
     try:
         urllib.request.urlretrieve(url, str(path))
+        st.session_state["_csv_download_status"] = f"Downloaded {path.name} ({path.stat().st_size:,} bytes)"
     except Exception as e:
-        print(f"[startup] Failed to download {path.name}: {e}")
+        st.session_state["_csv_download_status"] = f"FAILED to download {path.name}: {e}"
 
 _ensure_csv_downloaded(_CSV_2026, _CSV_2026_URL)
 
@@ -236,6 +237,9 @@ def get_model() -> DraftModel:
 def _data_banner():
     label = st.session_state.get("main_data_label", Path(DATA_PATH).name)
     st.caption(f"📂 Training data: **{label}** — change in ⚙️ Settings")
+    _dl_status = st.session_state.get("_csv_download_status")
+    if _dl_status:
+        st.caption(f"⬇️ {_dl_status}")
 
 
 @st.cache_data(show_spinner=False)
