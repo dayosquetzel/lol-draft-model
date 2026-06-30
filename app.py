@@ -31,6 +31,20 @@ _APP_DIR  = Path(__file__).parent
 _CSV_2025 = _APP_DIR / "2025_LoL_esports_match_data_from_OraclesElixir.csv"
 _CSV_2026 = _APP_DIR / "2026_LoL_esports_match_data_from_OraclesElixir.csv"
 
+_CSV_2026_URL = "https://github.com/dayosquetzel/lol-draft-model/releases/download/data-v1/2026_LoL_esports_match_data_from_OraclesElixir.csv"
+
+def _ensure_csv_downloaded(path: Path, url: str):
+    """Download a CSV from a URL if it isn't already present locally."""
+    if path.exists() or not url:
+        return
+    import urllib.request
+    try:
+        urllib.request.urlretrieve(url, str(path))
+    except Exception as e:
+        print(f"[startup] Failed to download {path.name}: {e}")
+
+_ensure_csv_downloaded(_CSV_2026, _CSV_2026_URL)
+
 @st.cache_resource(show_spinner="Combining 2025 + 2026 data…")
 def _make_default_csv() -> tuple:
     """Combine CSVs at startup once; cached so it only runs once per session."""
