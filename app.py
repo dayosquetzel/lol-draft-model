@@ -33,19 +33,8 @@ _CSV_2026 = _APP_DIR / "2026_LoL_esports_match_data_from_OraclesElixir.csv"
 
 _CSV_2026_URL = "https://github.com/dayosquetzel/lol-draft-model/releases/download/data-v1/2026_LoL_esports_match_data_from_OraclesElixir.csv"
 
-def _ensure_csv_downloaded(path: Path, url: str, min_expected_bytes: int = 1_000_000) -> str:
-    """Download a CSV from a URL if it isn't already present locally,
-    or if the existing file looks truncated/corrupt (too small).
-    Always returns a status string describing what happened."""
-    if path.exists():
-        size = path.stat().st_size
-        if size >= min_expected_bytes:
-            return f"Already present: {path.name} ({size:,} bytes)"
-        # File exists but looks corrupt/truncated — remove and retry
-        try:
-            path.unlink()
-        except Exception:
-            pass
+def _ensure_csv_downloaded(path: Path, url: str) -> str:
+    """Always download the CSV from the Release URL, replacing any cached file."""
     if not url:
         return f"No URL configured for {path.name}"
     import urllib.request
