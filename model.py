@@ -95,7 +95,7 @@ class DataLoader:
 
     def load(self, path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         print(f"[DataLoader] Loading {path} ...")
-        raw = pd.read_csv(path, low_memory=False)
+        raw = pd.read_csv(path, low_memory=False, encoding='latin-1')
         print(f"[DataLoader] Raw shape: {raw.shape}")
 
         raw["champion"] = raw["champion"].apply(self._norm)
