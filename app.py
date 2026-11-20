@@ -573,7 +573,7 @@ with tab_draft:
                 key="use_all_leagues",
                 on_change=_rebuild_on_toggle,
                 help=(
-                    "OFF (default): train on major leagues only (LCK, LPL, LEC, LCS, LCP + MSI/Worlds/EWC). "
+                    "OFF (default): train on major leagues only (LCK, LPL, LEC, LCS, LCP + MSI/WLDs/EWC). "
                     "Higher data quality, less noise.\n\n"
                     "ON: train on ALL leagues including regional (CBLOL, VCS, LJL, etc). "
                     "More matchup coverage, but lower-quality games included."
@@ -1780,7 +1780,7 @@ with tab_t1games:
     if raw_t1.empty:
         st.info("No data loaded.")
     else:
-        _MAJOR_LEAGUES = ["LCK", "LPL", "LEC", "LCS", "LCP", "MSI", "Worlds", "EWC"]
+        _MAJOR_LEAGUES = ["LCK", "LPL", "LEC", "LCS", "LCP", "MSI", "WLDs", "EWC"]
         t1c1, t1c2 = st.columns([3, 2])
         with t1c1:
             t1_region_filter = st.multiselect(
