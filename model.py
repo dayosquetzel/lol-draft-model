@@ -13,12 +13,12 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 
 MAJOR_LEAGUES   = {"LCK", "LPL", "LEC", "LCS", "LCP"}
-INTERNATIONAL   = {"MSI", "Worlds", "EWC"}
+INTERNATIONAL   = {"MSI", "WLDs", "EWC"}
 DEFAULT_LEAGUES = MAJOR_LEAGUES | INTERNATIONAL   # FST excluded by default
 
 LEAGUE_REGION_TIER: dict[str, int] = {
     # T1 — top two regions globally
-    "LCK": 1, "LPL": 1, "MSI": 1, "Worlds": 1, "EWC": 1,
+    "LCK": 1, "LPL": 1, "MSI": 1, "WLDs": 1, "EWC": 1,
     # T2 — strong western regions
     "LEC": 2, "LCS": 2, "LCP": 2,
     # T3 — strong regional leagues
@@ -212,7 +212,7 @@ class TeamStrengthModel:
     def _game_bt_weight(self, league: str, winner: str, loser: str) -> float:
         t_w = LEAGUE_REGION_TIER.get(str(league), 4)
         # For international, use the higher of the two teams' home region tiers
-        # (approximated by looking at the league; for MSI/Worlds/EWC use a fixed T1 weight)
+        # (approximated by looking at the league; for MSI/WLDs/EWC use a fixed T1 weight)
         if str(league) in INTERNATIONAL:
             return 1.0
         return (TIER_BASE_WEIGHT.get(t_w, 0.25))
